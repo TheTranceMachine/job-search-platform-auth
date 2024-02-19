@@ -20,7 +20,7 @@ const SelfServiceManager = require("ibmcloud-appid").SelfServiceManager;
 const helmet = require("helmet");
 const bodyParser = require("body-parser"); // get information from html forms
 const flash = require("connect-flash");
-const cors = require('cors')
+// const cors = require('cors')
 const base64url = require('base64url');
 const crypto = require('crypto');
 
@@ -41,9 +41,9 @@ const logger = log4js.getLogger("cloud-directory-app-sample-server");
 // )
 
 // const whitelist = ['http://localhost:5173', 'http://localhost:8080'];
-app.use(cors({
-	origin: ['http://localhost:5173', 'https://us-south.appid.cloud.ibm.com', 'http://localhost:8080']
-}))
+// app.use(cors({
+// 	origin: ['http://localhost:5173', 'https://us-south.appid.cloud.ibm.com', 'http://localhost:8080']
+// }))
 
 // app.use(function (req, res, next) {
 // 	if (process.env.NODE_ENV === 'development') {
