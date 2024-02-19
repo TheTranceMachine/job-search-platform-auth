@@ -127,15 +127,13 @@ app.use(bodyParser.json());
 
 const tenantId = process.env.TENANT_ID;
 // Configure passport.js to use WebAppStrategy
-if (process.env.NODE_ENV === 'development') {
-	passport.use(new WebAppStrategy({
-		tenantId: tenantId,
-		clientId: process.env.CLIENT_ID,
-		secret: process.env.SECRET,
-		oauthServerUrl: process.env.OAUTH_SERVER_URL,
-		redirectUri: `http://localhost:${port}` + CALLBACK_URL
-	}));
-}
+passport.use(new WebAppStrategy({
+	tenantId: tenantId,
+	clientId: process.env.CLIENT_ID,
+	secret: process.env.SECRET,
+	oauthServerUrl: process.env.OAUTH_SERVER_URL,
+	redirectUri: process.env.NODE_ENV === 'development' ? `http://localhost:${port}` + CALLBACK_URL : process.env.CE_API_BASE_URL + CALLBACK_URL
+}));
 
 let selfServiceManager = new SelfServiceManager({
 	iamApiKey: process.env.IAM_API_KEY,
