@@ -133,7 +133,7 @@ passport.use(new WebAppStrategy({
 	clientId: process.env.CLIENT_ID,
 	secret: process.env.SECRET,
 	oauthServerUrl: process.env.OAUTH_SERVER_URL,
-	redirectUri: `https://${process.env.CE_APP}.${process.env.CE_SUBDOMAIN}.${process.env.CE_DOMAIN}` + CALLBACK_URL
+	redirectUri: `http://localhost:5173` + CALLBACK_URL
 }));
 
 let selfServiceManager = new SelfServiceManager({
