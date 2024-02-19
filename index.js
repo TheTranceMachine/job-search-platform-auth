@@ -42,7 +42,8 @@ const logger = log4js.getLogger("cloud-directory-app-sample-server");
 
 // const whitelist = ['http://localhost:5173', 'http://localhost:8080'];
 app.use(cors({
-	origin: ['http://localhost:5173', 'https://auth-service.1cm56t43oohi.us-south.codeengine.appdomain.cloud', 'http://localhost:8080']
+	origin: ['http://localhost:5173', 'https://auth-service.1cm56t43oohi.us-south.codeengine.appdomain.cloud', 'http://localhost:8080'],
+	withCredentials: true
 }))
 
 // app.use(function (req, res, next) {
