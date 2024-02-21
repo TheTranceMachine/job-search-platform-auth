@@ -11,10 +11,10 @@ const logger = log4js.getLogger("using-management-api");
 logger.level = "DEBUG";
 
 logger.info("Starting");
-// ***REMOVED***
-const CLOUD_IAM_URL = "***REMOVED***";
-const CLOUD_IAM_API_KEY = "***REMOVED***";
-const APPID_MANAGEMENT_URL = "***REMOVED***";
+
+const CLOUD_IAM_URL = process.env.CLOUD_IAM_URL
+const CLOUD_IAM_API_KEY = process.env.IAM_API_KEY;
+const APPID_MANAGEMENT_URL = process.env.MANAGEMENT_URL;
 
 const app = express()
 // Enable CORS
@@ -47,7 +47,7 @@ const AuthenticateUserMiddleware = async (req, res, next) => {
         logger.info(`Retrieving user ${username}`);
         const response = await axios({
             method: "POST",
-            url: '***REMOVED***/token',
+            url: `${process.env.OAUTH_SERVER_URL}/token`,
             headers: {
                 'accept': 'application/json',
                 'authorization': `Basic ${btoa(`${process.env.CLIENT_ID}:${process.env.SECRET}`)}`,
@@ -106,8 +106,6 @@ function verifyTokenForAllRoutes(req, res, next) {
     const parsedAccessToken = JSON.parse(decodedToken);
     logger.info(parsedAccessToken);
     const now = Date.now() / 1000;
-    //const expiry = parsedAccessToken.iat + parsedAccessToken.exp;
-    // logger.info(new Date(parsedAccessToken.iat).getDate().toString());
     if (now < parsedAccessToken.exp) {
         // Token is still valid, proceed with using it
         logger.info('Access token is still valid');
