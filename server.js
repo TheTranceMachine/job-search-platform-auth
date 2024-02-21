@@ -183,15 +183,15 @@ async function createUser() {
         },
         body: {
             status: "PENDING",
-            userName: "***REMOVED***",
-            password: "***REMOVED***",
+            userName: process.env.TEST_USER_EMAIL,
+            password: process.env.TEST_USER_PASS,
             name: {
                 givenName: "Greg",
                 familyName: "Smolin",
                 formatted: "Greg Smolin"
             },
             emails: [{
-                value: "***REMOVED***",
+                value: process.env.TEST_USER_EMAIL,
                 primary: true
             }]
         }
