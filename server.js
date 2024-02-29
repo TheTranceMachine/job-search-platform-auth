@@ -19,13 +19,13 @@ const SECRET = process.env.SECRET;
 const OAUTH_SERVER_URL = process.env.OAUTH_SERVER_URL;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const PORT = process.env.PORT;
-const S_PORT = process.env.S_PORT;
 
 const app = express()
 // Enable CORS
 app.use(
     cors({
         origin: 'http://localhost:5173',
+        credentials: true
     })
 )
 
@@ -37,7 +37,8 @@ app.use(express.urlencoded({ extended: false }))
 app.use(session({
     secret: SESSION_SECRET,
     resave: true,
-    saveUninitialized: true
+    saveUninitialized: true,
+    cookie: { sameSite: 'lax' }
 }));
 
 ////////////////////////////////////////////////// Login
@@ -62,12 +63,14 @@ const AuthenticateUserMiddleware = async (req, res, next) => {
     }
 
     try {
-        logger.info(`Retrieving user ${username}`);
+        logger.warn(`Creating accessToken for user ${username}`);
         const response = await axios(config);
 
         req.session.accessToken = response.data.access_token;
         req.session.idToken = response.data.id_token;
         req.session.refreshToken = response.data.refresh_token;
+
+        logger.info(`Created accessToken and RefreshToken for ${username}`);
 
         next()
     } catch (err) {
@@ -86,6 +89,22 @@ const decodeToken = (token) => {
     return jsonPayload;
 }
 
+const sendForgottenPasswordEmail = async (userName) => {
+    const cloudIamAccessToken = await getCloudIamAccessToken();
+    logger.info(userName)
+    const config = {
+        method: "POST",
+        url: APPID_MANAGEMENT_URL + "/cloud_directory/forgot_password",
+        headers: {
+            "Authorization": "Bearer " + cloudIamAccessToken
+        },
+        data: {
+            user: userName
+        }
+    }
+    return await axios(config);
+}
+
 // Login route
 app.post('/login', AuthenticateUserMiddleware, async (req, res) => {
     // logger.info(req.session.accessToken);
@@ -96,11 +115,24 @@ app.post('/login', AuthenticateUserMiddleware, async (req, res) => {
         const { email, name, email_verified, preferred_username } = parsed;
         // ToDo: Before you respond, check if the user email was verified
         if (!email_verified) {
+            logger.error('Email is not verified!');
             res.status(401).json({ message: 'Email is not verified!' });
         }
         res.status(200).json({ message: 'User logged in!', body: { email, name, email_verified, preferred_username } });
     } else {
+        logger.error('Unauthorized');
         res.status(401).json({ message: 'Unauthorized!' });
+    }
+})
+
+app.post('/forgot_password', (req, res) => {
+    const { username } = req.body;
+    logger.info(`User ${username} forgot password`);
+    try {
+        const user = sendForgottenPasswordEmail(username);
+        res.status(200).json({ message: 'Reset Password Email was Sent.' });
+    } catch (err) {
+        res.status(500).json({ message: 'Something went wrong. Check if your username is correct.' });
     }
 })
 
@@ -122,7 +154,6 @@ const getCloudIamAccessToken = async () => {
             }
         }
         const response = await axios(config);
-        logger.info(response)
         const accessToken = response.data.access_token;
         logger.info("Retrieved Cloud IAM access token");
         return accessToken;
@@ -133,40 +164,71 @@ const getCloudIamAccessToken = async () => {
 
 }
 
+const resendUserVerification = async (uuid) => {
+    const cloudIamAccessToken = await getCloudIamAccessToken();
+    const config = {
+        method: "POST",
+        url: APPID_MANAGEMENT_URL + "/cloud_directory/resend/USER_VERIFICATION",
+        headers: {
+            "Authorization": "Bearer " + cloudIamAccessToken
+        },
+        data: { uuid }
+    }
+    return await axios(config);
+}
+
 const createUser = async ({ userName, password, email }) => {
     const cloudIamAccessToken = await getCloudIamAccessToken();
-    try {
-        logger.info("Creating a new user");
-        const data = {
-            status: "PENDING",
-            userName,
-            password,
-            emails: [{
-                value: email,
-                primary: true
-            }]
-        };
-        const config = {
-            method: "POST",
-            url: APPID_MANAGEMENT_URL + "/cloud_directory/sign_up?shouldCreateProfile=true",
-            headers: {
-                "Authorization": "Bearer " + cloudIamAccessToken
-            },
-            data
-        }
-        return await axios(config);
-    } catch (err) {
-        return err;
+    logger.info("Creating a new user");
+    const data = {
+        status: "PENDING",
+        userName,
+        password,
+        emails: [{
+            value: email,
+            primary: true
+        }]
+    };
+    const config = {
+        method: "POST",
+        url: APPID_MANAGEMENT_URL + "/cloud_directory/sign_up?shouldCreateProfile=true",
+        headers: {
+            "Authorization": "Bearer " + cloudIamAccessToken
+        },
+        data
     }
+    return await axios(config);
 }
 
 app.post('/register', async (req, res) => {
     const { userName, password, email } = req.body;
-    const response = await createUser({ userName, password, email });
-    if (response.status > 201) {
-        res.status(response.data.status).json({ message: response.data.detail })
+    if (email === '' || password === '' || userName === '') {
+        logger.error('No username, password and email');
+        res.status(400).json({ message: 'Please provide username, password and email' });
     } else {
-        res.status(200).json({ message: 'User registered!', body: response.data })
+        try {
+            const user = await createUser({ userName, password, email });
+            console.log(user);
+            logger.info('Created a new user!');
+            res.status(200).json({ message: 'User registered!', body: user.data })
+        } catch (err) {
+            logger.error(err.response.data);
+            res.status(err.response.status).json({ message: err.response.data.detail })
+        }
+    }
+})
+
+app.post('/register/resend', async (req, res) => {
+    const { id } = req.body;
+    console.log(id);
+    try {
+        logger.info(`Resending verification email for user id ${id}`);
+        resendUserVerification(id);
+        logger.info("Email sent");
+        res.status(200).json({ message: 'Verification email sent' })
+    } catch (err) {
+        logger.error(err.response.data);
+        res.status(500).json({ message: 'Email was not send' })
     }
 })
 
@@ -175,14 +237,11 @@ app.post('/register', async (req, res) => {
 const validateToken = (token) => {
     const decodedToken = decodeToken(token);
     const parsedAccessToken = JSON.parse(decodedToken);
-    logger.info(parsedAccessToken);
     const now = Date.now() / 1000;
     if (now < parsedAccessToken.exp) {
         // Token is still valid, proceed with using it
-        logger.info('Access token is still valid');
         return true;
     } else {
-        logger.info('Access token is invalid');
         // Token has expired, handle accordingly (e.g., request a new token)
         return false;
     }
@@ -193,16 +252,17 @@ const verifyTokenForAllRoutes = async (req, res, next) => {
     const accessToken = req.session.accessToken; // Assuming the token is passed in the Authorization header
     const refreshToken = req.session.refreshToken; // Assuming the token is passed in the Authorization header
 
-    console.log(accessToken);
-    console.log(refreshToken);
-    console.log(req.session);
     if (!accessToken) {
+        logger.error('accessToken Not Found!');
         return res.status(401).json({ error: 'Unauthorized!' });
     }
 
     if (validateToken(accessToken)) {
+        logger.info('accessToken Valid!');
         next();
     } else {
+        logger.error('Access token is invalid');
+        logger.info('Trying to refresh accessToken...');
         const data = {
             'grant_type': 'refresh_token',
             'refresh_token': refreshToken
@@ -221,15 +281,13 @@ const verifyTokenForAllRoutes = async (req, res, next) => {
         try {
             const response = await axios(config);
 
-            console.log(response);
-
             req.session.accessToken = response.data.access_token;
             req.session.idToken = response.data.id_token;
             req.session.refreshToken = response.data.refresh_token;
-
+            logger.info('accessToken refreshed!');
             next()
         } catch (err) {
-            logger.info(err.response.data);
+            logger.error('Failed to refresh accessToken');
             res.status(400).json({ message: err.response.data.error_description })
         }
     }
@@ -241,55 +299,8 @@ app.use(verifyTokenForAllRoutes);
 app.get('/todos', (req, res) => {
     // Check if access token exists in the session
     logger.info('IM PROTECTED!');
-    res.status(200).json({ message: 'Authorized!', body: [{ text: 'first' }] });
+    res.status(200).json({ message: 'Authorized!', body: [{ id: 1, title: 'first' }] });
 });
-
-
-
-async function getUserById(id) {
-    try {
-        logger.info(`Retrieving user id ${id}`);
-        const cloudIamAccessToken = await getCloudIamAccessToken();
-        return await axios({
-            method: "GET",
-            url: APPID_MANAGEMENT_URL + `/cloud_directory/Users/${id}`,
-            headers: {
-                "Authorization": "Bearer " + cloudIamAccessToken
-            }
-        });
-    } catch (err) {
-        return err;
-    }
-}
-
-async function getUsers() {
-    const cloudIamAccessToken = await getCloudIamAccessToken();
-    logger.info("Retrieving all users");
-    let response = await request({
-        method: "GET",
-        url: APPID_MANAGEMENT_URL + "/cloud_directory/Users",
-        json: true,
-        headers: {
-            "Authorization": "Bearer " + cloudIamAccessToken
-        }
-    });
-    logger.info("Response:", response);
-}
-
-async function deleteUser() {
-    const cloudIamAccessToken = await getCloudIamAccessToken();
-    const userId = process.argv[3];
-    logger.info("Deleting a user with ID", userId);
-    let response = await request({
-        method: "DELETE",
-        url: APPID_MANAGEMENT_URL + "/cloud_directory/Users/" + userId,
-        json: true,
-        headers: {
-            "Authorization": "Bearer " + cloudIamAccessToken
-        }
-    });
-    logger.info("Done!");
-}
 
 // Start server
 const HTTP_PORT = PORT || 8080
@@ -298,17 +309,3 @@ const HTTP_PORT = PORT || 8080
 http.createServer(app).listen(HTTP_PORT, () => {
     console.log(`HTTP listening on port ${HTTP_PORT}`)
 })
-
-// HTTPS configuration
-const HTTPS_PORT = S_PORT
-// this is only local signed cert, for production it will need certbot or paid SSL cert
-// const privateKey = fs.readFileSync('server.key', 'utf8')
-// const certificate = fs.readFileSync('server.cert', 'utf8')
-// const credentials = { key: privateKey, cert: certificate }
-
-// const httpsServer = https.createServer(credentials, app)
-
-// Run HTTPS server
-// httpsServer.listen(HTTPS_PORT, () => {
-//     console.log(`HTTPS listening on port ${HTTPS_PORT}`)
-// })
