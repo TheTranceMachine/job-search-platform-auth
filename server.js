@@ -112,6 +112,7 @@ app.post('/login', AuthenticateUserMiddleware, async (req, res) => {
         // decode idToken and send json response with user data
         const user = decodeToken(req.session.idToken);
         const parsed = JSON.parse(user);
+        console.log(parsed);
         const { email, name, email_verified, preferred_username } = parsed;
         // ToDo: Before you respond, check if the user email was verified
         if (!email_verified) {
@@ -120,8 +121,8 @@ app.post('/login', AuthenticateUserMiddleware, async (req, res) => {
         }
         res.status(200).json({ message: 'User logged in!', body: { email, name, email_verified, preferred_username } });
     } else {
-        logger.error('Unauthorized');
-        res.status(401).json({ message: 'Unauthorized!' });
+        logger.error('Unauthenticated');
+        res.status(401).json({ message: 'Unauthenticated!' });
     }
 })
 
@@ -232,6 +233,23 @@ app.post('/register/resend', async (req, res) => {
     }
 })
 
+////////////////////////////////////////////////// Logout
+
+app.get('/logout', (req, res) => {
+    logger.info('Logging user out');
+    if (req.session) {
+        req.session.destroy(err => {
+            if (err) {
+                res.status(400).json({ message: 'Unable to log out' });
+            } else {
+                res.status(200).json({ message: 'Logout successful' });
+            }
+        });
+    } else {
+        res.end()
+    }
+})
+
 ////////////////////////////////////////////////// Authenticated Routes
 
 const validateToken = (token) => {
@@ -248,13 +266,14 @@ const validateToken = (token) => {
 }
 
 const verifyTokenForAllRoutes = async (req, res, next) => {
+    console.log(req.body);
     // Get the token, decode it and compare exp time with current time
     const accessToken = req.session.accessToken; // Assuming the token is passed in the Authorization header
     const refreshToken = req.session.refreshToken; // Assuming the token is passed in the Authorization header
 
     if (!accessToken) {
         logger.error('accessToken Not Found!');
-        return res.status(401).json({ error: 'Unauthorized!' });
+        return res.status(401).json({ error: 'Unauthenticated!' });
     }
 
     if (validateToken(accessToken)) {
@@ -299,7 +318,36 @@ app.use(verifyTokenForAllRoutes);
 app.get('/todos', (req, res) => {
     // Check if access token exists in the session
     logger.info('IM PROTECTED!');
-    res.status(200).json({ message: 'Authorized!', body: [{ id: 1, title: 'first' }] });
+    res.status(200).json({ message: 'Authenticated!', body: [{ id: 1, title: 'first' }] });
+});
+
+app.post('/jobs', async (req, res) => {
+    const { username } = req.body;
+    const data = {
+        db: 'portfolio-website-saved-jobs',
+        options: {
+            selector: {
+                username: {
+                    $eq: username
+                }
+            },
+            fields: ['_id', 'name', '_rev', 'description', 'title', 'id', 'by', 'time', 'url', 'username']
+        }
+    };
+    const config = {
+        method: "POST",
+        url: 'https://cloudant-get-find.1cm56t43oohi.us-south.codeengine.appdomain.cloud',
+        data
+    };
+    try {
+        const jobs = await axios(config);
+        console.log(jobs);
+        res.status(200).json({ message: 'All Saved jobs fetched', body: jobs.body });
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ message: err });
+
+    }
 });
 
 // Start server
