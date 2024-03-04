@@ -11,7 +11,7 @@ logger.level = "DEBUG";
 
 logger.info("Starting");
 
-const CLOUD_IAM_URL = process.env.CLOUD_IAM_URL
+const CLOUD_IAM_URL = process.env.CLOUD_IAM_URL;
 const CLOUD_IAM_API_KEY = process.env.IAM_API_KEY;
 const APPID_MANAGEMENT_URL = process.env.MANAGEMENT_URL;
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -321,8 +321,33 @@ app.get('/todos', (req, res) => {
     res.status(200).json({ message: 'Authenticated!', body: [{ id: 1, title: 'first' }] });
 });
 
+app.post('/job', async (req, res) => {
+    const job = req.body;
+
+    const data = {
+        db: 'portfolio-website-saved-jobs',
+        document: job
+    }
+
+    const config = {
+        method: "POST",
+        url: 'https://cloudant-post-document.1cm56t43oohi.us-south.codeengine.appdomain.cloud',
+        data
+    };
+
+    try {
+        await axios(config);
+        res.status(200).json({ message: 'All Saved jobs fetched', body: job });
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ message: err });
+
+    }
+});
+
 app.post('/jobs', async (req, res) => {
     const { username } = req.body;
+
     const data = {
         db: 'portfolio-website-saved-jobs',
         options: {
@@ -334,6 +359,7 @@ app.post('/jobs', async (req, res) => {
             fields: ['_id', 'name', '_rev', 'description', 'title', 'id', 'by', 'time', 'url', 'username']
         }
     };
+
     const config = {
         method: "POST",
         url: 'https://cloudant-get-find.1cm56t43oohi.us-south.codeengine.appdomain.cloud',
@@ -341,10 +367,8 @@ app.post('/jobs', async (req, res) => {
     };
     try {
         const jobs = await axios(config);
-        console.log(jobs);
-        res.status(200).json({ message: 'All Saved jobs fetched', body: jobs.body });
+        res.status(200).json({ message: 'All Saved jobs fetched', body: jobs.data.docs });
     } catch (err) {
-        console.log(err);
         res.status(500).json({ message: err });
 
     }
